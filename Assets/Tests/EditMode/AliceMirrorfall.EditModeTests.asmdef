@@ -1,0 +1,9 @@
+{
+  "name": "AliceMirrorfall.EditModeTests",
+  "references": ["AliceMirrorfall.Runtime"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false,
+  "defineConstraints": []
+}

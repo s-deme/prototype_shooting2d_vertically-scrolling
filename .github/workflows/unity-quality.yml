@@ -1,0 +1,41 @@
+name: Unity quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  editmode-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          unityVersion: 2022.3.52f1
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          testMode: EditMode
+          artifactsPath: test-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: editmode-results
+          path: test-results
+
+  windows-build:
+    runs-on: ubuntu-latest
+    needs: editmode-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          unityVersion: 2022.3.52f1
+          targetPlatform: StandaloneWindows64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alice-mirrorfall-windows
+          path: build

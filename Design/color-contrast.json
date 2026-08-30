@@ -1,0 +1,16 @@
+{
+  "colors": {
+    "surface": "#170D36",
+    "on-surface": "#FFF8FF",
+    "primary": "#F6D56E",
+    "on-primary": "#261527",
+    "surface-raised": "#2B1952",
+    "on-surface-variant": "#CCC0DE"
+  },
+  "pairs": [
+    { "foreground": "on-surface", "background": "surface", "minimum": 4.5, "label": "Main game copy" },
+    { "foreground": "primary", "background": "surface", "minimum": 3.0, "label": "Key visual accents" },
+    { "foreground": "on-surface-variant", "background": "surface-raised", "minimum": 4.5, "label": "Support copy" },
+    { "foreground": "on-primary", "background": "primary", "minimum": 4.5, "label": "Primary control label" }
+  ]
+}
