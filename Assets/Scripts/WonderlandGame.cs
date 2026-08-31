@@ -5,53 +5,11 @@ using UnityEngine;
 
 namespace AliceMirrorfall
 {
-    public enum GameState { Title, Playing, Paused, Result }
-
-    [Serializable] internal sealed class ScoreEntry { public string name; public int score; public bool clear; }
-    [Serializable] internal sealed class InputProfile
-    {
-        public KeyCode up = KeyCode.UpArrow, down = KeyCode.DownArrow, left = KeyCode.LeftArrow, right = KeyCode.RightArrow;
-        public KeyCode shoot = KeyCode.Z, focus = KeyCode.LeftShift, bomb = KeyCode.X, pause = KeyCode.P;
-    }
-    [Serializable] internal sealed class RunRecord
-    {
-        public int score, graze, chain, stage, difficulty, shots, bombs, misses;
-        public string character, dateUtc;
-        public bool clear;
-    }
-    [Serializable] internal sealed class ReplayPoint { public float time, x, y; }
-    [Serializable] internal sealed class ReplayData
-    {
-        public string label, character;
-        public int score, stage, difficulty;
-        public bool clear;
-        public List<ReplayPoint> points = new List<ReplayPoint>();
-    }
-    [Serializable] internal sealed class SaveData
-    {
-        public int version = 3, bestScore, clears, runs, totalGraze, bestChain, unlockedStage = 1;
-        public int master = 100, music = 35, sfx = 55, textScale = 100, difficulty, character;
-        public bool reducedMotion, autoFire, highContrast;
-        public string language = "ja";
-        public InputProfile input = new InputProfile();
-        public List<ScoreEntry> scores = new List<ScoreEntry>();
-        public List<RunRecord> runHistory = new List<RunRecord>();
-        public List<ReplayData> replays = new List<ReplayData>();
-        public List<string> badges = new List<string>();
-    }
-    internal sealed class PlayerUnit { public Vector2 pos; public float shotTimer, invincible, power = 1; public int fragments, lives = 3, bombs = 3; }
-    internal sealed class EnemyUnit { public string kind; public Vector2 pos; public float drift, age, hp, radius, speed, timer, flash; public int score; }
-    internal sealed class FriendlyShot { public Vector2 pos, velocity; public float radius, damage, life; }
-    internal sealed class EnemyShot { public Vector2 pos, velocity; public float radius, age; public Color color; public string shape; public bool grazed, cleared; }
-    internal sealed class Pickup { public Vector2 pos; public string kind; public float spin; }
-    internal sealed class Spark { public Vector2 pos, velocity; public float size, life, maxLife; public Color color; }
-    internal sealed class Queen { public Vector2 pos = new Vector2(240, -80); public int phase; public float phaseTime = -1, hp, maxHp, timer, subTimer, flash; public bool entering = true; }
-
     /// <summary>
     /// An asset-free, fully playable vertical bullet-hell game. The art, UI, procedural sounds,
     /// local high scores, achievements, touch controls and all gameplay run from this component.
     /// </summary>
-    public sealed class WonderlandGame : MonoBehaviour
+    public sealed partial class WonderlandGame : MonoBehaviour
     {
         private const string SaveKey = "alice-mirrorfall-save-v1";
         private const float FieldWidth = 480f;
@@ -77,9 +35,6 @@ namespace AliceMirrorfall
         private float toastUntil;
         private Texture2D pixel, circle;
         private GUIStyle titleStyle, displayStyle, bodyStyle, smallStyle, buttonStyle, primaryButtonStyle, centeredStyle;
-        private AudioSource musicSource, sfxSource;
-        private readonly Dictionary<string, AudioClip> toneCache = new Dictionary<string, AudioClip>();
-
         private readonly Color primary = new Color(.965f, .835f, .43f);
         private readonly Color surface = new Color(.09f, .05f, .21f, .95f);
         private readonly Color surfaceRaised = new Color(.17f, .1f, .32f, .98f);
@@ -204,11 +159,11 @@ namespace AliceMirrorfall
 
         private static bool Held(KeyCode key) { return Input.GetKey(key); }
         private static bool Pressed(KeyCode key) { return Input.GetKeyDown(key); }
-        private string CharacterName() { return save.character == 1 ? "CHESHIRE" : save.character == 2 ? "DORMOUSE" : "ALICE"; }
-        private string DifficultyName() { return save.difficulty == 0 ? "EASY" : save.difficulty == 1 ? "NORMAL" : save.difficulty == 2 ? "HARD" : "LUNATIC"; }
-        private float DifficultySpeed() { return .86f + save.difficulty * .12f; }
-        private string StageName() { return stage == 1 ? "RABBIT HOLE" : stage == 2 ? "MAD TEA GARDEN" : "QUEEN'S COURT"; }
-        private string BossName() { return stage == 1 ? "WHITE RABBIT" : stage == 2 ? "MAD HATTER" : "QUEEN OF HEARTS"; }
+        private string CharacterName() { return GameCatalog.CharacterName(save.character); }
+        private string DifficultyName() { return GameCatalog.DifficultyName(save.difficulty); }
+        private float DifficultySpeed() { return ProductRules.DifficultySpeed(save.difficulty); }
+        private string StageName() { return GameCatalog.StageName(stage); }
+        private string BossName() { return GameCatalog.BossName(stage); }
         private string L(string japanese, string english) { return save != null && save.language == "en" ? english : japanese; }
 
         private void UpdatePlayer(float dt)
@@ -233,12 +188,20 @@ namespace AliceMirrorfall
         private void ShootPlayer()
         {
             int level = Mathf.FloorToInt(player.power);
-            float[] lanes = level == 1 ? new[] { -7f, 7f } : level == 2 ? new[] { -13f, 0f, 13f } : level == 3 ? new[] { -18f, -6f, 6f, 18f } : level >= 4 ? new[] { -24f, -12f, 0f, 12f, 24f } : new[] { 0f };
-            if (save.character == 1) lanes = level >= 3 ? new[] { -34f, -17f, 0f, 17f, 34f } : new[] { -17f, 0f, 17f };
-            if (save.character == 2) lanes = level >= 3 ? new[] { -10f, 10f } : new[] { 0f };
-            float damage = (2.25f + level * .35f) * (save.character == 1 ? .85f : save.character == 2 ? 1.45f : 1f);
-            foreach (var lane in lanes) playerShots.Add(new FriendlyShot { pos = player.pos + new Vector2(lane, -19), velocity = new Vector2(lane * (save.character == 1 ? 1.25f : .7f), -430), radius = level >= 3 ? 4 : 3.4f, damage = damage, life = 1.8f });
-            shotsFired += lanes.Length;
+            PlayerShotProfile profile = GameCatalog.GetShotProfile(save.character, level);
+            float damage = (2.25f + level * .35f) * profile.damageMultiplier;
+            foreach (float lane in profile.lanes)
+            {
+                playerShots.Add(new FriendlyShot
+                {
+                    pos = player.pos + new Vector2(lane, -19),
+                    velocity = new Vector2(lane * profile.horizontalVelocityMultiplier, -430),
+                    radius = level >= 3 ? 4 : 3.4f,
+                    damage = damage,
+                    life = 1.8f
+                });
+            }
+            shotsFired += profile.lanes.Length;
             if (Time.unscaledTime - lastShotSound > .07f) { PlayTone(740, .035f, .16f); lastShotSound = Time.unscaledTime; }
         }
 
@@ -293,7 +256,7 @@ namespace AliceMirrorfall
 
         private void FireFoe(EnemyUnit foe)
         {
-            float speedFactor = .86f + save.difficulty * .12f;
+            float speedFactor = DifficultySpeed();
             if (foe.kind == "rabbit") FireAimed(foe.pos, 94 * speedFactor, new Color(1, .55f, .64f), 5, "round");
             else if (foe.kind == "card")
             {
@@ -365,12 +328,7 @@ namespace AliceMirrorfall
         private void BeginQueenPhase()
         {
             queen.phaseTime = 0; queen.timer = .58f; queen.subTimer = .92f; queen.flash = .25f;
-            string[] names = stage == 1
-                ? new[] { "「白兎の急降下」", "「逆さ時計の歯車」", "「穴の底の残像」" }
-                : stage == 2
-                    ? new[] { "「狂ったお茶会」", "「砂糖菓子の嵐」", "「帽子屋の悪戯」" }
-                    : new[] { "「紅の女王の行進」", "「時計仕掛けの薔薇園」", "「裁きのハート」" };
-            ShowToast("SPELL CARD " + (queen.phase + 1) + "　" + names[queen.phase]);
+            ShowToast("SPELL CARD " + (queen.phase + 1) + "　" + GameCatalog.SpellCardName(stage, queen.phase));
             PlayTone(420 + queen.phase * 80, .24f, .38f);
         }
 
@@ -417,11 +375,11 @@ namespace AliceMirrorfall
             foreach (var shot in enemyShots) shot.cleared = true;
             AddScore(50000 + queen.phase * 25000);
             queen.phase++;
-            if (queen.phase >= 3)
+            if (queen.phase >= GameCatalog.SpellCardCount)
             {
                 queen = null;
                 ending = true;
-                if (!practice && stage < 3) Invoke(nameof(AdvanceStage), .78f);
+                if (!practice && stage < GameCatalog.StageCount) Invoke(nameof(AdvanceStage), .78f);
                 else Invoke(nameof(ClearStage), .78f);
                 return;
             }
@@ -606,92 +564,6 @@ namespace AliceMirrorfall
 
         private void CreateStars() { for (int i = 0; i < 78; i++) stars.Add(new Vector4(UnityEngine.Random.Range(0f, 480), UnityEngine.Random.Range(0f, 640), UnityEngine.Random.Range(.4f, 2.2f), UnityEngine.Random.Range(9f, 40f))); }
         private void UpdateStars(float dt) { for (int i = 0; i < stars.Count; i++) { var star = stars[i]; star.y += star.w * dt; if (star.y > 643) { star.y = -3; star.x = UnityEngine.Random.Range(0f, 480); } stars[i] = star; } }
-
-        private void CreateAudio()
-        {
-            musicSource = gameObject.AddComponent<AudioSource>(); sfxSource = gameObject.AddComponent<AudioSource>();
-            musicSource.loop = true; musicSource.clip = CreateMusicClip(); RefreshVolumes();
-        }
-        private void RefreshVolumes() { float master = save.master / 100f; if (musicSource != null) musicSource.volume = master * save.music / 100f * .35f; if (sfxSource != null) sfxSource.volume = master * save.sfx / 100f * .23f; }
-        private void StartMusic() { if (save.music > 0 && musicSource != null && !musicSource.isPlaying) musicSource.Play(); }
-        private void StopMusic() { if (musicSource != null && musicSource.isPlaying) musicSource.Stop(); }
-        private void PlayTone(float frequency, float duration, float amplitude)
-        {
-            if (sfxSource == null || save.sfx <= 0) return;
-            string key = frequency + ":" + duration + ":" + amplitude;
-            if (!toneCache.TryGetValue(key, out AudioClip clip))
-            {
-                const int rate = 22050; int count = Mathf.Max(32, Mathf.CeilToInt(rate * duration)); var data = new float[count];
-                for (int i = 0; i < count; i++) data[i] = Mathf.Sin(i * frequency * Mathf.PI * 2 / rate) * Mathf.Exp(-i / (float)count * 5) * amplitude;
-                clip = AudioClip.Create("SFX-" + key, count, 1, rate, false);
-                clip.SetData(data, 0);
-                toneCache[key] = clip;
-            }
-            sfxSource.PlayOneShot(clip);
-        }
-        private static AudioClip CreateMusicClip()
-        {
-            const int rate = 22050; var data = new float[rate * 4]; float[] notes = { 261.63f, 329.63f, 392f, 523.25f, 392f, 329.63f, 293.66f, 369.99f, 440f, 587.33f, 440f, 369.99f };
-            for (int i = 0; i < data.Length; i++) { float time = i / (float)rate; float note = notes[Mathf.FloorToInt(time * 3) % notes.Length] * .5f; float phase = time % (1f / 3f); float env = Mathf.Clamp01(1 - phase * 3) * .42f; data[i] = (Mathf.Sin(Mathf.PI * 2 * note * time) + Mathf.Sin(Mathf.PI * 2 * note * 2 * time) * .18f) * env; }
-            var clip = AudioClip.Create("Wonderland Theme", data.Length, 1, rate, false); clip.SetData(data, 0); return clip;
-        }
-
-        private void OnDestroy()
-        {
-            foreach (var clip in toneCache.Values) if (clip != null) Destroy(clip);
-        }
-
-        private void LoadSave()
-        {
-            save = LoadCandidate(PlayerPrefs.GetString(SaveKey, ""));
-            if (save == null)
-            {
-                save = LoadCandidate(PlayerPrefs.GetString(SaveKey + ".backup", ""));
-                saveRecovered = save != null;
-            }
-            if (save == null) { save = new SaveData(); saveRecovered = PlayerPrefs.HasKey(SaveKey); }
-            if (save.scores == null) save.scores = new List<ScoreEntry>();
-            if (save.runHistory == null) save.runHistory = new List<RunRecord>();
-            if (save.replays == null) save.replays = new List<ReplayData>();
-            if (save.badges == null) save.badges = new List<string>();
-            if (save.input == null) save.input = new InputProfile();
-            if (save.version < 3)
-            {
-                save.version = 3;
-                save.master = Mathf.Clamp(save.master == 0 ? 100 : save.master, 0, 100);
-                save.textScale = Mathf.Clamp(save.textScale == 0 ? 100 : save.textScale, 80, 140);
-                save.unlockedStage = Mathf.Clamp(save.unlockedStage == 0 ? 1 : save.unlockedStage, 1, 3);
-                if (string.IsNullOrEmpty(save.language)) save.language = "ja";
-                Save();
-            }
-        }
-        private static SaveData LoadCandidate(string json)
-        {
-            if (string.IsNullOrEmpty(json)) return null;
-            try
-            {
-                var candidate = JsonUtility.FromJson<SaveData>(json);
-                return candidate != null && candidate.version <= 99 ? candidate : null;
-            }
-            catch { return null; }
-        }
-        private void Save()
-        {
-            string old = PlayerPrefs.GetString(SaveKey, "");
-            if (!string.IsNullOrEmpty(old)) PlayerPrefs.SetString(SaveKey + ".backup", old);
-            save.version = 3;
-            PlayerPrefs.SetString(SaveKey, JsonUtility.ToJson(save));
-            PlayerPrefs.Save();
-        }
-        private void UnlockBadge(string id)
-        {
-            if (save.badges.Contains(id)) return;
-            save.badges.Add(id); Save();
-            int index = Array.IndexOf(BadgeIds, id);
-            if (index >= 0) ShowToast("実績解除：" + BadgeNames[index]);
-        }
-        private void ShowToast(string value) { toast = value; toastUntil = Time.unscaledTime + 2.5f; }
-        private static string ScoreText(int value) { return Mathf.Max(0, value).ToString("000000000"); }
 
         private void OnGUI()
         {
@@ -882,19 +754,19 @@ namespace AliceMirrorfall
             Fill(new Rect(field.x + 54, field.y + 119, 372, 398), surfaceRaised);
             Label(new Rect(field.x + 70, field.y + 137, 340, 55), L("FLIGHT PREPARATION\n<size=29>出撃準備</size>", "FLIGHT PREPARATION\n<size=29>READY TO FLY</size>"), displayStyle);
             Label(new Rect(field.x + 85, field.y + 207, 120, 24), L("難易度", "DIFFICULTY"), bodyStyle);
-            if (Button(new Rect(field.x + 205, field.y + 202, 150, 30), DifficultyName(), false)) save.difficulty = (save.difficulty + 1) % 4;
+            if (Button(new Rect(field.x + 205, field.y + 202, 150, 30), DifficultyName(), false)) save.difficulty = ProductRules.CycleOption(save.difficulty, GameCatalog.DifficultyCount);
             Label(new Rect(field.x + 85, field.y + 248, 120, 24), L("主人公", "PILOT"), bodyStyle);
-            if (Button(new Rect(field.x + 205, field.y + 243, 150, 30), CharacterName(), false)) save.character = (save.character + 1) % 3;
+            if (Button(new Rect(field.x + 205, field.y + 243, 150, 30), CharacterName(), false)) save.character = ProductRules.CycleOption(save.character, GameCatalog.CharacterCount);
             Label(new Rect(field.x + 85, field.y + 289, 120, 24), L("開始ステージ", "STAGE"), bodyStyle);
-            if (Button(new Rect(field.x + 205, field.y + 284, 150, 30), "STAGE " + selectedStage + "  " + SelectedStageName(), false)) selectedStage = selectedStage >= save.unlockedStage ? 1 : selectedStage + 1;
+            if (Button(new Rect(field.x + 205, field.y + 284, 150, 30), "STAGE " + selectedStage + "  " + SelectedStageName(), false)) selectedStage = ProductRules.CycleStage(selectedStage, save.unlockedStage);
             Label(new Rect(field.x + 85, field.y + 328, 270, 33), CharacterHint(), centeredStyle);
             if (Button(new Rect(field.x + 85, field.y + 381, 270, 35), L("ストーリーモード開始", "START STORY MODE"), true)) { Save(); BeginGame(false); }
             if (Button(new Rect(field.x + 85, field.y + 425, 270, 31), L("このステージを練習", "PRACTICE THIS STAGE"), false)) { Save(); BeginGame(true); }
             if (Button(new Rect(field.x + 85, field.y + 466, 270, 31), L("戻る", "BACK"), false)) panel = "";
         }
 
-        private string SelectedStageName() { return selectedStage == 1 ? "RABBIT HOLE" : selectedStage == 2 ? "MAD TEA GARDEN" : "QUEEN'S COURT"; }
-        private string CharacterHint() { return save.character == 1 ? "CHESHIRE：広範囲・軽いショット" : save.character == 2 ? "DORMOUSE：高威力・集中ショット" : "ALICE：扱いやすい標準ショット"; }
+        private string SelectedStageName() { return GameCatalog.StageName(selectedStage); }
+        private string CharacterHint() { return GameCatalog.CharacterHint(save.character); }
 
         private void DrawReplayLibrary(Rect field)
         {
@@ -1010,14 +882,7 @@ namespace AliceMirrorfall
 
         private void SetBinding(string action, KeyCode key)
         {
-            if (action == "up") save.input.up = key;
-            else if (action == "down") save.input.down = key;
-            else if (action == "left") save.input.left = key;
-            else if (action == "right") save.input.right = key;
-            else if (action == "shoot") save.input.shoot = key;
-            else if (action == "focus") save.input.focus = key;
-            else if (action == "bomb") save.input.bomb = key;
-            else if (action == "pause") save.input.pause = key;
+            save.input.TrySetBinding(action, key);
         }
 
         private void DrawArchive(Rect field)
@@ -1034,7 +899,7 @@ namespace AliceMirrorfall
         }
 
         private static string CharacterForRecord(string value) { return string.IsNullOrEmpty(value) ? "ALICE" : value; }
-        private static string DifficultyForRecord(int value) { return value == 0 ? "EASY" : value == 1 ? "NORMAL" : value == 2 ? "HARD" : "LUNATIC"; }
+        private static string DifficultyForRecord(int value) { return GameCatalog.DifficultyName(value); }
 
         private void DrawSidePanel()
         {

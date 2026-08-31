@@ -12,7 +12,25 @@ namespace AliceMirrorfall
 
         public static int ClampStage(int requestedStage, int unlockedStage)
         {
-            return Mathf.Clamp(requestedStage, 1, Mathf.Clamp(unlockedStage, 1, 3));
+            return Mathf.Clamp(requestedStage, 1, Mathf.Clamp(unlockedStage, 1, GameCatalog.StageCount));
+        }
+
+        public static int CycleOption(int currentValue, int optionCount)
+        {
+            if (optionCount <= 0) return 0;
+            return (Mathf.Clamp(currentValue, 0, optionCount - 1) + 1) % optionCount;
+        }
+
+        public static int CycleStage(int currentStage, int unlockedStage)
+        {
+            int highestAvailableStage = Mathf.Clamp(unlockedStage, 1, GameCatalog.StageCount);
+            int normalizedStage = Mathf.Clamp(currentStage, 1, highestAvailableStage);
+            return normalizedStage >= highestAvailableStage ? 1 : normalizedStage + 1;
+        }
+
+        public static float DifficultySpeed(int difficulty)
+        {
+            return .86f + Mathf.Clamp(difficulty, 0, GameCatalog.DifficultyCount - 1) * .12f;
         }
 
         public static string SanitizeInitials(string raw)

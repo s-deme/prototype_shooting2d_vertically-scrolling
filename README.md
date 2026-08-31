@@ -4,7 +4,7 @@
 
 ## 動作環境
 
-- Unity 2022.3 LTS 以降
+- Unity 2022.3.52f1
 - 2D Core / Unity UI (UGUI)
 
 ## 起動
@@ -14,13 +14,13 @@
 
 ## 操作
 
-- 矢印キー / WASD: 移動
-- Z / Space: ショット
+- 矢印キー: 移動
+- Z: ショット
 - Shift: 低速移動（当たり判定表示）
 - X: ボム
 - P / Escape: ポーズ
 
-画面上のタッチ操作にも対応しています。設定、ハイスコア、実績は PlayerPrefs に保存されます。
+キー設定画面から移動、ショット、低速、ボム、ポーズを変更できます。WASDとSpaceは初期割り当てではありません。ゲームパッドはD-Pad、Button 0のショット、Button 1の低速移動に対応しますが、ボムとポーズは割り当てられていません。画面上のタッチ操作にも対応しています。設定、ハイスコア、実績はPlayerPrefsに保存されます。
 
 ## 実装済み機能
 
@@ -31,3 +31,15 @@
 - ローカルランキング、詳細戦績、実績、ゴーストリプレイ、音量、演出軽減、文字サイズ、高コントラスト、オートショット
 - キーリマップ、ゲームパッド基礎入力、タッチ操作、セーフエリア、全画面、アセット不要の手続き描画と手続きサウンド
 - セーブデータのバックアップ/復旧、EditModeテスト、GitHub Actionsのテスト/Windowsビルド構成
+
+## 開発・検証
+
+- Unityの **Window > General > Test Runner** からEditModeテストを実行します。
+- CI定義は [.github/workflows/unity-quality.yml](.github/workflows/unity-quality.yml) です。利用にはリポジトリの `UNITY_LICENSE` シークレットが必要です。
+- Unity Package Managerの依存関係は [Packages/manifest.json](Packages/manifest.json) と `Packages/packages-lock.json` で管理します。
+- 機能範囲の詳細は [Design/FEATURES.md](Design/FEATURES.md)、色の実装値は [Design/color-contrast.json](Design/color-contrast.json) を参照してください。
+
+## 配布情報
+
+- [CREDITS.md](CREDITS.md) — 制作物とパッケージ依存関係
+- [PRIVACY.md](PRIVACY.md) — ローカル保存とオフライン動作
