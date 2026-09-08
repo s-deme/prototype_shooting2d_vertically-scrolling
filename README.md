@@ -30,16 +30,9 @@
 - 難易度・主人公/ショットタイプ・開始ステージ選択、練習、コンティニュー、ポーズ、リトライ、ゲームオーバー、クリア結果
 - ローカルランキング、詳細戦績、実績、ゴーストリプレイ、音量、演出軽減、文字サイズ、高コントラスト、オートショット
 - キーリマップ、ゲームパッド基礎入力、タッチ操作、セーフエリア、全画面、アセット不要の手続き描画と手続きサウンド
-- セーブデータのバックアップ/復旧、EditModeテスト、GitHub Actionsのテスト/Windowsビルド構成
+- セーブデータのバックアップと復旧
 
-## 開発・検証
-
-- Unityの **Window > General > Test Runner** からEditModeテストを実行します。
-- CI定義は [.github/workflows/unity-quality.yml](.github/workflows/unity-quality.yml) です。利用にはリポジトリの `UNITY_LICENSE` シークレットが必要です。
-- Unity Package Managerの依存関係は [Packages/manifest.json](Packages/manifest.json) と `Packages/packages-lock.json` で管理します。
-- 機能範囲の詳細は [Design/FEATURES.md](Design/FEATURES.md)、色の実装値は [Design/color-contrast.json](Design/color-contrast.json) を参照してください。
-
-## 配布情報
+## クレジットとプライバシー
 
 - [CREDITS.md](CREDITS.md) — 制作物とパッケージ依存関係
 - [PRIVACY.md](PRIVACY.md) — ローカル保存とオフライン動作
