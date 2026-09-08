@@ -23,16 +23,19 @@ namespace AliceMirrorfall.Editor
             var gold = new Color(.965f, .835f, .43f);
             var rose = new Color(.9f, .25f, .46f);
             for (int y = 0; y < 512; y++)
-            for (int x = 0; x < 512; x++)
             {
-                float dx = x - 256f;
-                float dy = y - 256f;
-                float radius = Mathf.Sqrt(dx * dx + dy * dy);
-                Color color = Color.Lerp(violet, new Color(.22f, .1f, .36f), y / 512f);
-                if (radius < 186) color = rose;
-                if (radius < 128) color = gold;
-                if (radius < 76) color = violet;
-                icon.SetPixel(x, y, color);
+                Color rowColor = Color.Lerp(violet, new Color(.22f, .1f, .36f), y / 512f);
+                for (int x = 0; x < 512; x++)
+                {
+                    float dx = x - 256f;
+                    float dy = y - 256f;
+                    float radius = Mathf.Sqrt(dx * dx + dy * dy);
+                    Color color = rowColor;
+                    if (radius < 186) color = rose;
+                    if (radius < 128) color = gold;
+                    if (radius < 76) color = violet;
+                    icon.SetPixel(x, y, color);
+                }
             }
             File.WriteAllBytes(iconPath, icon.EncodeToPNG());
             Object.DestroyImmediate(icon);

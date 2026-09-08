@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace AliceMirrorfall
 {
     /// <summary>
@@ -42,17 +44,17 @@ namespace AliceMirrorfall
         public const int DifficultyCount = 4;
         public const int SpellCardCount = 3;
 
-        public static string StageName(int stage) => StageNames[ClampOneBased(stage, StageCount) - 1];
-        public static string BossName(int stage) => BossNames[ClampOneBased(stage, StageCount) - 1];
-        public static string CharacterName(int character) => CharacterNames[ClampZeroBased(character, CharacterCount)];
-        public static string DifficultyName(int difficulty) => DifficultyNames[ClampZeroBased(difficulty, DifficultyCount)];
-        public static string CharacterHint(int character) => CharacterHints[ClampZeroBased(character, CharacterCount)];
-        public static string SpellCardName(int stage, int phase) => SpellCardNames[ClampOneBased(stage, StageCount) - 1][ClampZeroBased(phase, SpellCardNames[0].Length)];
+        public static string StageName(int stage) => StageNames[Mathf.Clamp(stage, 1, StageCount) - 1];
+        public static string BossName(int stage) => BossNames[Mathf.Clamp(stage, 1, StageCount) - 1];
+        public static string CharacterName(int character) => CharacterNames[Mathf.Clamp(character, 0, CharacterCount - 1)];
+        public static string DifficultyName(int difficulty) => DifficultyNames[Mathf.Clamp(difficulty, 0, DifficultyCount - 1)];
+        public static string CharacterHint(int character) => CharacterHints[Mathf.Clamp(character, 0, CharacterCount - 1)];
+        public static string SpellCardName(int stage, int phase) => SpellCardNames[Mathf.Clamp(stage, 1, StageCount) - 1][Mathf.Clamp(phase, 0, SpellCardNames[0].Length - 1)];
 
         public static PlayerShotProfile GetShotProfile(int character, int powerLevel)
         {
-            int normalizedCharacter = ClampZeroBased(character, CharacterCount);
-            int normalizedPower = ClampOneBased(powerLevel, 4);
+            int normalizedCharacter = Mathf.Clamp(character, 0, CharacterCount - 1);
+            int normalizedPower = Mathf.Clamp(powerLevel, 1, AliceShotProfiles.Length);
 
             if (normalizedCharacter == 1)
             {
@@ -66,9 +68,6 @@ namespace AliceMirrorfall
 
             return AliceShotProfiles[normalizedPower - 1];
         }
-
-        private static int ClampOneBased(int value, int count) => value < 1 ? 1 : value > count ? count : value;
-        private static int ClampZeroBased(int value, int count) => value < 0 ? 0 : value >= count ? count - 1 : value;
     }
 
     internal sealed class PlayerShotProfile

@@ -60,12 +60,25 @@ namespace AliceMirrorfall
 
         private void OnApplicationFocus(bool hasFocus)
         {
-            if (!hasFocus && state == GameState.Playing) { state = GameState.Paused; ShowToast("フォーカスが外れたため一時停止しました"); StopMusic(); }
+            if (!hasFocus && state == GameState.Playing) PauseGame("フォーカスが外れたため一時停止しました");
         }
 
         private void OnApplicationPause(bool paused)
         {
-            if (paused && state == GameState.Playing) { state = GameState.Paused; ShowToast("アプリが中断されたため一時停止しました"); StopMusic(); }
+            if (paused && state == GameState.Playing) PauseGame("アプリが中断されたため一時停止しました");
+        }
+
+        private void PauseGame(string message = null)
+        {
+            state = GameState.Paused;
+            if (message != null) ShowToast(message);
+            StopMusic();
+        }
+
+        private void ResumeGame()
+        {
+            state = GameState.Playing;
+            StartMusic();
         }
 
         private void Update()
@@ -81,11 +94,11 @@ namespace AliceMirrorfall
             }
             if (state == GameState.Playing)
             {
-                if (Pressed(save.input.pause) || Input.GetKeyDown(KeyCode.Escape)) { state = GameState.Paused; StopMusic(); return; }
+                if (Pressed(save.input.pause) || Input.GetKeyDown(KeyCode.Escape)) { PauseGame(); return; }
                 if (Pressed(save.input.bomb)) UseBomb();
                 UpdateGame(dt);
             }
-            else if (state == GameState.Paused && (Pressed(save.input.pause) || Input.GetKeyDown(KeyCode.Escape))) { state = GameState.Playing; StartMusic(); }
+            else if (state == GameState.Paused && (Pressed(save.input.pause) || Input.GetKeyDown(KeyCode.Escape))) ResumeGame();
             else if (state == GameState.Title && string.IsNullOrEmpty(panel) && Input.GetKeyDown(KeyCode.Return)) BeginGame(false);
             else if (state == GameState.Result && Input.GetKeyDown(KeyCode.Return)) SaveResultAndTitle();
         }
@@ -111,7 +124,7 @@ namespace AliceMirrorfall
             player = new PlayerUnit { pos = new Vector2(240, 566), invincible = 1.3f };
             recording = new ReplayData { label = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm"), character = CharacterName(), stage = stage, difficulty = save.difficulty };
             queen = null;
-            foes.Clear(); playerShots.Clear(); enemyShots.Clear(); pickups.Clear(); sparks.Clear();
+            ClearRunEntities();
             UnlockBadge("rabbit-hole");
             ShowToast(saveRecovered ? "セーブデータを安全に復旧しました" : (isPractice ? "スペル練習：女王がまもなく現れます" : "STAGE " + stage + "　時計ウサギを追いかけよう"));
             saveRecovered = false;
@@ -126,8 +139,13 @@ namespace AliceMirrorfall
             ending = false;
             player = null; queen = null;
             viewingReplay = null; replayClock = 0;
-            foes.Clear(); playerShots.Clear(); enemyShots.Clear(); pickups.Clear(); sparks.Clear();
+            ClearRunEntities();
             StopMusic();
+        }
+
+        private void ClearRunEntities()
+        {
+            foes.Clear(); playerShots.Clear(); enemyShots.Clear(); pickups.Clear(); sparks.Clear();
         }
 
         private void UpdateGame(float dt)
@@ -159,6 +177,7 @@ namespace AliceMirrorfall
 
         private static bool Held(KeyCode key) { return Input.GetKey(key); }
         private static bool Pressed(KeyCode key) { return Input.GetKeyDown(key); }
+        private bool FocusHeld() { return Held(save.input.focus) || Held(KeyCode.Joystick1Button1); }
         private string CharacterName() { return GameCatalog.CharacterName(save.character); }
         private string DifficultyName() { return GameCatalog.DifficultyName(save.difficulty); }
         private float DifficultySpeed() { return ProductRules.DifficultySpeed(save.difficulty); }
@@ -172,9 +191,9 @@ namespace AliceMirrorfall
                 (Held(save.input.right) || Held(KeyCode.Joystick1Button15) ? 1 : 0) - (Held(save.input.left) || Held(KeyCode.Joystick1Button13) ? 1 : 0),
                 (Held(save.input.down) || Held(KeyCode.Joystick1Button14) ? 1 : 0) - (Held(save.input.up) || Held(KeyCode.Joystick1Button12) ? 1 : 0));
             if (move.sqrMagnitude > 1) move.Normalize();
-            var focused = Held(save.input.focus) || Held(KeyCode.Joystick1Button1);
+            var focused = FocusHeld();
             player.pos += move * (focused ? 115 : 245) * dt;
-            player.pos = new Vector2(Mathf.Clamp(player.pos.x, 18, 462), Mathf.Clamp(player.pos.y, 74, 621));
+            player.pos = ClampPlayerPosition(player.pos);
             player.invincible = Mathf.Max(0, player.invincible - dt);
             player.shotTimer -= dt;
             if ((save.autoFire || Held(save.input.shoot) || Held(KeyCode.Joystick1Button0)) && player.shotTimer <= 0)
@@ -183,6 +202,11 @@ namespace AliceMirrorfall
                 player.shotTimer = focused ? .105f : .082f;
             }
             if (move.sqrMagnitude > 0 && UnityEngine.Random.value < dt * 16) SparkAt(player.pos + new Vector2(UnityEngine.Random.Range(-4f, 4f), 12), new Vector2(UnityEngine.Random.Range(-10f, 10f), 35), UnityEngine.Random.Range(1, 2.5f), new Color(.7f, .93f, 1));
+        }
+
+        private static Vector2 ClampPlayerPosition(Vector2 position)
+        {
+            return new Vector2(Mathf.Clamp(position.x, 18, 462), Mathf.Clamp(position.y, 74, 621));
         }
 
         private void ShootPlayer()
@@ -372,7 +396,7 @@ namespace AliceMirrorfall
         {
             if (queen == null) return;
             Burst(queen.pos, new Color(1, .94f, .69f), 58, 230);
-            foreach (var shot in enemyShots) shot.cleared = true;
+            MarkEnemyShotsCleared();
             AddScore(50000 + queen.phase * 25000);
             queen.phase++;
             if (queen.phase >= GameCatalog.SpellCardCount)
@@ -404,6 +428,11 @@ namespace AliceMirrorfall
 
         private void ClearStage() { FinishGame(true); }
 
+        private void MarkEnemyShotsCleared()
+        {
+            foreach (var shot in enemyShots) shot.cleared = true;
+        }
+
         private void UpdateEnemyShots(float dt)
         {
             for (int i = enemyShots.Count - 1; i >= 0; i--)
@@ -430,7 +459,7 @@ namespace AliceMirrorfall
                 var item = pickups[i];
                 item.pos += new Vector2(0, 48 * dt); item.spin += dt * 4;
                 Vector2 delta = player.pos - item.pos; float d = delta.magnitude;
-                if ((player.pos.y < 180 || Held(save.input.focus) || Held(KeyCode.Joystick1Button1)) && d < 160) item.pos += delta * dt * 5.7f;
+                if ((player.pos.y < 180 || FocusHeld()) && d < 160) item.pos += delta * dt * 5.7f;
                 if (d < 19) { Collect(item); pickups.RemoveAt(i); }
                 else if (item.pos.y > 664) pickups.RemoveAt(i);
             }
@@ -455,7 +484,7 @@ namespace AliceMirrorfall
         {
             if (player.invincible > 0 || state != GameState.Playing) return;
             player.lives--; player.invincible = 2.3f; player.pos = new Vector2(240, 568); player.power = Mathf.Max(1, player.power - .55f); chain = 0; misses++;
-            foreach (var shot in enemyShots) shot.cleared = true;
+            MarkEnemyShotsCleared();
             Burst(player.pos, Color.white, 35, 220); PlayTone(105, .32f, .5f);
             ShowToast(player.lives >= 0 ? "MISS… 残りLIFE " + Mathf.Max(0, player.lives) : "夢がほどけていく…");
             if (player.lives < 0) Invoke(nameof(GameOver), .6f);
@@ -467,7 +496,7 @@ namespace AliceMirrorfall
         {
             if (state != GameState.Playing || player == null || player.bombs <= 0) { if (state == GameState.Playing) ShowToast("ボムがありません"); return; }
             player.bombs--; player.invincible = Mathf.Max(player.invincible, 1.3f); bombsUsed++;
-            foreach (var shot in enemyShots) shot.cleared = true;
+            MarkEnemyShotsCleared();
             foreach (var foe in foes) { foe.hp -= 26; foe.flash = .3f; }
             if (queen != null && !queen.entering) { queen.hp -= 70; queen.flash = .4f; if (queen.hp <= 0) DefeatQueenPhase(); }
             Burst(player.pos, primary, 58, 310); ShowToast("LAST WORD 「白兎の懐中時計」"); PlayTone(110, .38f, .46f);
@@ -677,8 +706,7 @@ namespace AliceMirrorfall
         {
             float s = shot.radius * 2;
             GUI.color = shot.color;
-            if (shot.shape == "diamond" || shot.shape == "rose") GUI.DrawTexture(new Rect(field.x + shot.pos.x - shot.radius, field.y + shot.pos.y - shot.radius, s, s), pixel);
-            else GUI.DrawTexture(new Rect(field.x + shot.pos.x - shot.radius, field.y + shot.pos.y - shot.radius, s, s), circle);
+            GUI.DrawTexture(new Rect(field.x + shot.pos.x - shot.radius, field.y + shot.pos.y - shot.radius, s, s), shot.shape == "diamond" || shot.shape == "rose" ? pixel : circle);
             GUI.color = Color.white;
         }
 
@@ -698,7 +726,7 @@ namespace AliceMirrorfall
             GUI.color = new Color(.68f, .88f, 1); GUI.DrawTexture(new Rect(p.x - 13, p.y - 3, 26, 26), circle);
             GUI.color = new Color(1, .85f, .74f); GUI.DrawTexture(new Rect(p.x - 8, p.y - 13, 16, 16), circle);
             GUI.color = primary; GUI.DrawTexture(new Rect(p.x - 11, p.y - 20, 22, 5), pixel);
-            if (Held(save.input.focus) || Held(KeyCode.Joystick1Button1)) { GUI.color = primary; GUI.DrawTexture(new Rect(p.x - 4, p.y + 9, 8, 8), circle); }
+            if (FocusHeld()) { GUI.color = primary; GUI.DrawTexture(new Rect(p.x - 4, p.y + 9, 8, 8), circle); }
             GUI.color = Color.white;
         }
 
@@ -727,7 +755,7 @@ namespace AliceMirrorfall
             if (GUI.RepeatButton(new Rect(field.x + 397, field.y + 565, 72, 47), "SHOT", primaryButtonStyle)) ShootPlayer();
             if (GUI.Button(new Rect(field.x + 324, field.y + 565, 67, 47), "BOMB", buttonStyle)) UseBomb();
         }
-        private void MoveTouch(Vector2 direction) { if (player != null) player.pos = new Vector2(Mathf.Clamp(player.pos.x + direction.x * 5, 18, 462), Mathf.Clamp(player.pos.y + direction.y * 5, 74, 621)); }
+        private void MoveTouch(Vector2 direction) { if (player != null) player.pos = ClampPlayerPosition(player.pos + direction * 5); }
 
         private void DrawTitle(Rect field)
         {
@@ -786,7 +814,7 @@ namespace AliceMirrorfall
             Fill(new Rect(field.x + 73, field.y + 185, 334, 272), new Color(.1f, .05f, .22f, .97f));
             Label(new Rect(field.x + 95, field.y + 205, 290, 78), "TEA BREAK\n<size=36>PAUSED</size>", displayStyle);
             Label(new Rect(field.x + 95, field.y + 283, 290, 27), "夢の時間は止まっている。", centeredStyle);
-            if (Button(new Rect(field.x + 110, field.y + 327, 260, 35), "つづける   [ P ]", true)) { state = GameState.Playing; StartMusic(); }
+            if (Button(new Rect(field.x + 110, field.y + 327, 260, 35), "つづける   [ P ]", true)) ResumeGame();
             if (Button(new Rect(field.x + 110, field.y + 371, 260, 32), "最初からやりなおす", false)) BeginGame(practice);
             if (Button(new Rect(field.x + 110, field.y + 411, 260, 32), "タイトルへ", false)) ReturnToTitle();
         }
@@ -891,7 +919,11 @@ namespace AliceMirrorfall
             Label(new Rect(field.x + 60, field.y + 87, 360, 58), "WONDERLAND ARCHIVE\n<size=29>記録と実績</size>", displayStyle);
             string ranking = save.scores.Count == 0 ? "01   ---   000000000" : string.Join("\n", save.scores.Select((e, i) => (i + 1).ToString("00") + "   " + e.name + "   " + ScoreText(e.score) + (e.clear ? " ♛" : "")));
             string badges = "";
-            for (int i = 0; i < BadgeIds.Length; i++) badges += (save.badges.Contains(BadgeIds[i]) ? BadgeIcons[i] : "○") + "  <b>" + BadgeNames[i] + "</b>  " + (save.badges.Contains(BadgeIds[i]) ? "UNLOCKED" : BadgeDescriptions[i]) + "\n";
+            for (int i = 0; i < BadgeIds.Length; i++)
+            {
+                bool unlocked = save.badges.Contains(BadgeIds[i]);
+                badges += (unlocked ? BadgeIcons[i] : "○") + "  <b>" + BadgeNames[i] + "</b>  " + (unlocked ? "UNLOCKED" : BadgeDescriptions[i]) + "\n";
+            }
             string run = save.runHistory.Count == 0 ? "NO RUN DATA" : "BEST RUN  " + CharacterForRecord(save.runHistory[0].character) + "  ST" + save.runHistory[0].stage + "  " + DifficultyForRecord(save.runHistory[0].difficulty) + "\nSHOTS " + save.runHistory[0].shots + "  BOMBS " + save.runHistory[0].bombs + "  MISSES " + save.runHistory[0].misses;
             Label(new Rect(field.x + 65, field.y + 151, 350, 385), "<color=#f6d56e><b>BEST SCORE</b></color>  " + ScoreText(save.bestScore) + "\n<color=#f6d56e><b>TOTAL RUNS</b></color>  " + save.runs + "    <color=#f6d56e><b>TOTAL GRAZE</b></color>  " + save.totalGraze + "\n" + run + "\n\n<color=#f6d56e><b>RANKING</b></color>\n" + ranking + "\n\n<color=#f6d56e><b>BADGES</b></color>\n" + badges, bodyStyle);
             if (Button(new Rect(field.x + 115, field.y + 512, 250, 30), "ゴーストリプレイ", false)) panel = "replay";
