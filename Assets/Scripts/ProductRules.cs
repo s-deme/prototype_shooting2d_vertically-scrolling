@@ -23,8 +23,8 @@ namespace AliceMirrorfall
 
         public static int CycleStage(int currentStage, int unlockedStage)
         {
-            int highestAvailableStage = Mathf.Clamp(unlockedStage, 1, GameCatalog.StageCount);
-            int normalizedStage = Mathf.Clamp(currentStage, 1, highestAvailableStage);
+            int highestAvailableStage = ClampStage(unlockedStage, GameCatalog.StageCount);
+            int normalizedStage = ClampStage(currentStage, highestAvailableStage);
             return normalizedStage >= highestAvailableStage ? 1 : normalizedStage + 1;
         }
 
