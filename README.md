@@ -4,7 +4,7 @@
 
 ## 動作環境
 
-- Unity 2022.3.52f1
+- Unity 2022.3.62f3
 - 2D Core / Unity UI (UGUI)
 
 ## 起動
